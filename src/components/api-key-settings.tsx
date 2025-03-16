@@ -25,10 +25,12 @@ import type { APIKey } from "@/types";
 
 interface APIKeySettingsProps {
   apiKeys: APIKey[];
-  onAddKey: (apiKey: APIKey) => void;
-  onRemoveKey: (keyId: string) => void;
-  onUpdateKey: (apiKey: APIKey) => void;
-  onSetDefaultKey: (keyId: string) => void;
+  onAddKey: (apiKey: APIKey) => Promise<void>;
+  onRemoveKey: (keyId: string) => Promise<void>;
+  onUpdateKey: (apiKey: APIKey) => Promise<void>;
+  onSetDefaultKey: (keyId: string) => Promise<void>;
+  isLoading?: boolean;
+  error?: Error | null;
 }
 
 export default function APIKeySettings({
@@ -37,6 +39,8 @@ export default function APIKeySettings({
   onRemoveKey,
   onUpdateKey,
   onSetDefaultKey,
+  isLoading,
+  error,
 }: APIKeySettingsProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
@@ -50,26 +54,30 @@ export default function APIKeySettings({
 
   const [editKey, setEditKey] = useState<Partial<APIKey>>({});
 
-  const handleAddKey = () => {
-    if (!newKey.name || !newKey.key) {
+  const handleAddKey = async () => {
+    if (!newKey.name || !newKey.key || !newKey.provider) {
       return;
     }
 
-    onAddKey({
-      id: Date.now().toString(),
-      name: newKey.name,
-      provider: newKey.provider as "openai" | "anthropic" | "google" | "other",
-      key: newKey.key,
-      isDefault: apiKeys.length === 0, // Make it default if it's the first key
-    });
+    try {
+      await onAddKey({
+        id: Date.now().toString(),
+        name: newKey.name,
+        provider: newKey.provider,
+        key: newKey.key,
+        isDefault: apiKeys.length === 0, // Make it default if it's the first key
+      });
 
-    setNewKey({
-      provider: "openai",
-      name: "",
-      key: "",
-    });
+      setNewKey({
+        provider: "openai",
+        name: "",
+        key: "",
+      });
 
-    setIsAdding(false);
+      setIsAdding(false);
+    } catch (error) {
+      console.error("Failed to add API key:", error);
+    }
   };
 
   const handleStartEdit = (key: APIKey) => {
@@ -77,25 +85,37 @@ export default function APIKeySettings({
     setEditKey({ ...key });
   };
 
-  const handleSaveEdit = () => {
-    if (editingKey && editKey.name && editKey.key) {
-      onUpdateKey({
-        id: editingKey,
-        name: editKey.name,
-        provider: editKey.provider as
-          | "openai"
-          | "anthropic"
-          | "google"
-          | "other",
-        key: editKey.key,
-        isDefault: editKey.isDefault || false,
-      });
-      setEditingKey(null);
+  const handleSaveEdit = async () => {
+    if (editingKey && editKey.name && editKey.key && editKey.provider) {
+      try {
+        await onUpdateKey({
+          id: editingKey,
+          name: editKey.name,
+          provider: editKey.provider,
+          key: editKey.key,
+          isDefault: editKey.isDefault || false,
+        });
+        setEditingKey(null);
+      } catch (error) {
+        console.error("Failed to update API key:", error);
+      }
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingKey(null);
+  const handleRemoveKey = async (keyId: string) => {
+    try {
+      await onRemoveKey(keyId);
+    } catch (error) {
+      console.error("Failed to remove API key:", error);
+    }
+  };
+
+  const handleSetDefaultKey = async (keyId: string) => {
+    try {
+      await onSetDefaultKey(keyId);
+    } catch (error) {
+      console.error("Failed to set default API key:", error);
+    }
   };
 
   const toggleShowKey = (id: string) => {
@@ -104,6 +124,26 @@ export default function APIKeySettings({
       [id]: !prev[id],
     }));
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-4 h-full overflow-y-auto">
+        <div className="text-center p-4 text-muted-foreground">
+          Loading API keys...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 h-full overflow-y-auto">
+        <div className="text-center p-4 text-destructive">
+          Error: {error.message}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 h-full overflow-y-auto">
@@ -145,9 +185,9 @@ export default function APIKeySettings({
               <Label htmlFor="provider">Provider</Label>
               <Select
                 value={newKey.provider}
-                onValueChange={(value) =>
-                  setNewKey({ ...newKey, provider: value })
-                }
+                onValueChange={(
+                  value: "openai" | "anthropic" | "google" | "other",
+                ) => setNewKey({ ...newKey, provider: value })}
               >
                 <SelectTrigger id="provider">
                   <SelectValue placeholder="Select provider" />
@@ -231,7 +271,7 @@ export default function APIKeySettings({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => onSetDefaultKey(apiKey.id)}
+                      onClick={() => handleSetDefaultKey(apiKey.id)}
                       className="text-xs"
                     >
                       Set as Default
@@ -258,9 +298,9 @@ export default function APIKeySettings({
                       </Label>
                       <Select
                         value={editKey.provider}
-                        onValueChange={(value) =>
-                          setEditKey({ ...editKey, provider: value })
-                        }
+                        onValueChange={(
+                          value: "openai" | "anthropic" | "google" | "other",
+                        ) => setEditKey({ ...editKey, provider: value })}
                       >
                         <SelectTrigger id={`edit-provider-${apiKey.id}`}>
                           <SelectValue />
@@ -303,7 +343,7 @@ export default function APIKeySettings({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={handleCancelEdit}
+                        onClick={() => setEditingKey(null)}
                       >
                         <X className="h-4 w-4 mr-1" /> Cancel
                       </Button>
@@ -345,7 +385,7 @@ export default function APIKeySettings({
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => onRemoveKey(apiKey.id)}
+                        onClick={() => handleRemoveKey(apiKey.id)}
                       >
                         <Trash2 className="h-4 w-4 mr-1" /> Delete
                       </Button>

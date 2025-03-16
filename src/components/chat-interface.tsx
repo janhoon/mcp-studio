@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, type ComponentPropsWithoutRef } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  type ComponentPropsWithoutRef,
+} from "react";
 import { Send, Menu, Plus, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,30 +21,29 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Chat, APIKey } from "@/types";
+import type { Chat, APIKey, Message } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface ChatInterfaceProps {
   chat: Chat | null;
+  messages: Message[];
   apiKeys: APIKey[];
   onCreateChat: () => void;
   onUpdateApiKey: (apiKeyId: string | null) => void;
+  onUpdateMessages: (chatId: string, messages: Message[]) => void;
 }
 
 export default function ChatInterface({
   chat,
+  messages,
   apiKeys,
   onCreateChat,
   onUpdateApiKey,
+  onUpdateMessages,
 }: ChatInterfaceProps) {
-  const [isMounted, setIsMounted] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Get the selected API key
   const selectedApiKey = chat?.apiKeyId
@@ -50,7 +55,7 @@ export default function ChatInterface({
     input,
     handleInputChange,
     handleSubmit: originalHandleSubmit,
-    setMessages,
+    setMessages: setAiMessages,
     error,
   } = useChat({
     api: "/api/chat",
@@ -58,8 +63,20 @@ export default function ChatInterface({
       apiKey: selectedApiKey?.key,
       provider: selectedApiKey?.provider,
     },
-    onFinish: () => {
+    onFinish: (message) => {
       setIsLoading(false);
+      // Store messages in IndexedDB when chat completes
+      if (chat) {
+        const now = new Date().toISOString();
+        const assistantMessage = {
+          id: message.id,
+          role: message.role as "assistant",
+          content: message.content,
+          timestamp: now,
+          chatId: chat.id,
+        };
+        onUpdateMessages(chat.id, [assistantMessage]);
+      }
     },
     onError: (error) => {
       console.error(error);
@@ -71,6 +88,18 @@ export default function ChatInterface({
     e.preventDefault();
     setIsLoading(true);
     originalHandleSubmit(e);
+    // Store user message in IndexedDB immediately after user sends message
+    if (chat) {
+      const now = new Date().toISOString();
+      const userMessage = {
+        id: Date.now().toString(),
+        role: "user" as const,
+        content: input,
+        timestamp: now,
+        chatId: chat.id,
+      };
+      onUpdateMessages(chat.id, [userMessage]);
+    }
   };
 
   // Determine if we're waiting for the first response chunk
@@ -80,18 +109,20 @@ export default function ChatInterface({
     return lastMessage?.role === "assistant" && !lastMessage.content;
   }, [isLoading, aiMessages]);
 
-  // Sync messages from chat to AI messages on chat change
+  // Sync messages from IndexedDB to AI messages
   useEffect(() => {
-    if (chat) {
-      setMessages(
-        chat.messages.map((m) => ({
+    if (messages.length > 0) {
+      setAiMessages(
+        messages.map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
         })),
       );
+    } else {
+      setAiMessages([]);
     }
-  }, [chat, setMessages]);
+  }, [messages, setAiMessages]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -141,41 +172,41 @@ export default function ChatInterface({
                   ? "ml-auto bg-primary text-primary-foreground"
                   : "bg-muted prose prose-sm dark:prose-invert max-w-none",
                 // Add a subtle animation for the latest message if it's streaming
-                index === aiMessages.length - 1 && isProcessing && message.role === "assistant"
+                index === aiMessages.length - 1 &&
+                  isProcessing &&
+                  message.role === "assistant"
                   ? "after:absolute after:bottom-0 after:right-0 after:h-4 after:w-2 after:animate-pulse after:bg-foreground/20 after:rounded-full"
-                  : ""
+                  : "",
               )}
             >
               {message.role === "user" ? (
-                <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                <p className="whitespace-pre-wrap break-words">
+                  {message.content}
+                </p>
               ) : (
                 <div className="prose prose-sm dark:prose-invert max-w-none [&_pre]:!mt-0 [&_pre]:!mb-0">
-                  <ReactMarkdown 
+                  <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
                       pre: ({ children }) => children,
-                      code(props: ComponentPropsWithoutRef<"code"> & { inline?: boolean }) {
+                      code(
+                        props: ComponentPropsWithoutRef<"code"> & {
+                          inline?: boolean;
+                        },
+                      ) {
                         const { inline, className, children } = props;
-                        const match = /language-(\w+)/.exec(className || '');
+                        const match = /language-(\w+)/.exec(className || "");
                         return !inline ? (
                           <div className="not-prose bg-muted/50 rounded-md my-0">
                             <SyntaxHighlighter
-                              language={match?.[1] || 'text'}
+                              language={match?.[1] || "text"}
                               style={oneDark}
                               customStyle={{
                                 margin: 0,
-                                padding: '1rem',
-                                background: 'transparent',
-                              }}
-                              PreTag="div"
-                              codeTagProps={{
-                                style: {
-                                  fontSize: 'inherit',
-                                  lineHeight: 'inherit',
-                                }
+                                padding: "0.5rem",
                               }}
                             >
-                              {String(children).replace(/\n$/, '')}
+                              {String(children).replace(/\n$/, "")}
                             </SyntaxHighlighter>
                           </div>
                         ) : (
@@ -183,7 +214,7 @@ export default function ChatInterface({
                             {children}
                           </code>
                         );
-                      }
+                      },
                     }}
                   >
                     {message.content}
@@ -191,12 +222,11 @@ export default function ChatInterface({
                 </div>
               )}
               <div className="text-xs opacity-70 mt-1 flex items-center gap-2">
-                {isMounted && (
-                  <span>{new Date().toLocaleTimeString()}</span>
-                )}
-                {index === aiMessages.length - 1 && isProcessing && message.role === "assistant" && (
-                  <span className="text-xs">typing...</span>
-                )}
+                {index === aiMessages.length - 1 &&
+                  isProcessing &&
+                  message.role === "assistant" && (
+                    <span className="text-xs">typing...</span>
+                  )}
               </div>
             </div>
           ))
@@ -216,7 +246,11 @@ export default function ChatInterface({
             <Input
               value={input}
               onChange={handleInputChange}
-              placeholder={isProcessing ? "Waiting for response..." : "Type your message..."}
+              placeholder={
+                isProcessing
+                  ? "Waiting for response..."
+                  : "Type your message..."
+              }
               className="pr-24"
               disabled={!selectedApiKey || isProcessing || isLoading}
             />

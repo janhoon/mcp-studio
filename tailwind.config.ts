@@ -61,40 +61,40 @@ const config: Config = {
       typography: {
         DEFAULT: {
           css: {
-            'code::before': {
-              content: '""'
+            "code::before": {
+              content: '""',
             },
-            'code::after': {
-              content: '""'
+            "code::after": {
+              content: '""',
             },
-            'table': {
-              borderCollapse: 'collapse',
-              width: '100%',
-              marginTop: '1.5em',
-              marginBottom: '1.5em'
+            table: {
+              borderCollapse: "collapse",
+              width: "100%",
+              marginTop: "1.5em",
+              marginBottom: "1.5em",
             },
-            'th, td': {
-              border: '1px solid var(--tw-prose-counters)',
-              padding: '0.75em',
-              textAlign: 'left'
+            "th, td": {
+              border: "1px solid var(--tw-prose-counters)",
+              padding: "0.75em",
+              textAlign: "left",
             },
-            'th': {
-              backgroundColor: 'var(--tw-prose-pre-bg)',
-              fontWeight: '600'
+            th: {
+              backgroundColor: "var(--tw-prose-pre-bg)",
+              fontWeight: "600",
             },
-            'thead th': {
-              verticalAlign: 'bottom',
-              borderBottomWidth: '2px'
+            "thead th": {
+              verticalAlign: "bottom",
+              borderBottomWidth: "2px",
             },
-            'tbody tr': {
-              borderBottomWidth: '1px'
+            "tbody tr": {
+              borderBottomWidth: "1px",
             },
-            'tbody tr:last-child': {
-              borderBottomWidth: '0'
-            }
-          }
-        }
-      }
+            "tbody tr:last-child": {
+              borderBottomWidth: "0",
+            },
+          },
+        },
+      },
     },
   },
   plugins: [animate, typography],

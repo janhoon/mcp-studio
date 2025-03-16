@@ -1,61 +1,62 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import ChatInterface from "@/components/chat-interface";
 import ChatHistory from "@/components/chat-history";
 import MCPSettings from "@/components/mcp-settings";
-import type { MCPServer, Chat, Message, APIKey } from "@/types";
+import type { MCPServer, Chat, APIKey, Message } from "@/types";
+import * as db from "@/lib/db";
 
 export default function Home() {
   // State for MCP servers
-  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
-    "mcp-servers",
-    [],
-  );
-
-  // State for API keys
-  const [apiKeys, setApiKeys] = useLocalStorage<APIKey[]>("api-keys", []);
-
-  // State for chats
-  const [chats, setChats] = useLocalStorage<Chat[]>("chats", []);
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
 
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      const [loadedApiKeys, loadedChats] = await Promise.all([
+        db.getApiKeys(),
+        db.getChats(),
+      ]);
+      setApiKeys(loadedApiKeys as APIKey[]);
+      setChats(loadedChats as Chat[]);
+    };
+    loadData();
+  }, []);
+
+  // Load messages when active chat changes
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (activeChat) {
+        const chatMessages = await db.getChatMessages(activeChat.id);
+        setMessages(chatMessages);
+      } else {
+        setMessages([]);
+      }
+    };
+    loadMessages();
+  }, [activeChat]);
+
   // Create a new chat
-  const createNewChat = () => {
+  const createNewChat = async () => {
     // Find default API key if any
     const defaultKey = apiKeys.find((key) => key.isDefault);
 
     const newChat: Chat = {
       id: Date.now().toString(),
       title: "New Chat",
-      messages: [],
       createdAt: new Date().toISOString(),
       mcpServerId: mcpServers.length > 0 ? mcpServers[0].id : null,
       apiKeyId: defaultKey?.id || null,
     };
 
-    setChats([newChat, ...chats]);
+    await db.addChat(newChat);
+    setChats([...chats, newChat]);
     setActiveChat(newChat);
-  };
-
-  // Add a message to the active chat
-  const addMessage = (message: Message) => {
-    if (!activeChat) return;
-
-    const updatedChat = {
-      ...activeChat,
-      messages: [...activeChat.messages, message],
-      title:
-        activeChat.messages.length === 0
-          ? message.content.slice(0, 30) + "..."
-          : activeChat.title,
-    };
-
-    setActiveChat(updatedChat);
-    setChats(
-      chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)),
-    );
   };
 
   // Add a new MCP server
@@ -68,50 +69,8 @@ export default function Home() {
     setMcpServers(mcpServers.filter((server) => server.id !== serverId));
   };
 
-  // Add a new API key
-  // const addApiKey = (apiKey: APIKey) => {
-  //   if (apiKey.isDefault) {
-  //     // If this key is set as default, remove default from others
-  //     setApiKeys([
-  //       ...apiKeys.map((key) => ({ ...key, isDefault: false })),
-  //       apiKey,
-  //     ]);
-  //   } else {
-  //     setApiKeys([...apiKeys, apiKey]);
-  //   }
-  // };
-
-  // // Remove an API key
-  // const removeApiKey = (keyId: string) => {
-  //   setApiKeys(apiKeys.filter((key) => key.id !== keyId));
-
-  //   // Update any chats using this key to use null
-  //   setChats(
-  //     chats.map((chat) =>
-  //       chat.apiKeyId === keyId ? { ...chat, apiKeyId: null } : chat,
-  //     ),
-  //   );
-  // };
-
-  // // Update an API key
-  // const updateApiKey = (updatedKey: APIKey) => {
-  //   setApiKeys(
-  //     apiKeys.map((key) => (key.id === updatedKey.id ? updatedKey : key)),
-  //   );
-  // };
-
-  // // Set a key as the default
-  // const setDefaultApiKey = (keyId: string) => {
-  //   setApiKeys(
-  //     apiKeys.map((key) => ({
-  //       ...key,
-  //       isDefault: key.id === keyId,
-  //     })),
-  //   );
-  // };
-
   // Update the API key for the active chat
-  const updateChatApiKey = (apiKeyId: string | null) => {
+  const updateChatApiKey = async (apiKeyId: string | null) => {
     if (!activeChat) return;
 
     const updatedChat = {
@@ -119,28 +78,51 @@ export default function Home() {
       apiKeyId,
     };
 
-    setActiveChat(updatedChat);
+    await db.updateChat(updatedChat);
     setChats(
       chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)),
     );
+    setActiveChat(updatedChat);
   };
 
-  const deleteChat = (chatId: string) => {
+  const deleteChat = async (chatId: string) => {
+    await db.deleteChat(chatId);
     setChats(chats.filter((chat) => chat.id !== chatId));
-  };
-
-  const renameChat = (chatId: string, newTitle: string) => {
-    setChats(chats.map((chat) => (chat.id === chatId ? { ...chat, title: newTitle } : chat)));
-  };
-
-  // Initialize with a new chat if none exists
-  useEffect(() => {
-    if (chats.length === 0) {
-      createNewChat();
-    } else if (!activeChat) {
-      setActiveChat(chats[0]);
+    if (activeChat?.id === chatId) {
+      setActiveChat(null);
     }
-  }, [chats, activeChat]);
+  };
+
+  const renameChat = async (chatId: string, newTitle: string) => {
+    const chat = chats.find((c) => c.id === chatId);
+    if (chat) {
+      const updatedChat = { ...chat, title: newTitle };
+      await db.updateChat(updatedChat);
+      setChats(chats.map((c) => (c.id === chatId ? updatedChat : c)));
+      if (activeChat?.id === chatId) {
+        setActiveChat(updatedChat);
+      }
+    }
+  };
+
+  const updateChatMessages = async (chatId: string, newMessages: Message[]) => {
+    // Add each new message to the database
+    await Promise.all(
+      newMessages.map((msg) => {
+        const messageToSave = {
+          ...msg,
+          chatId,
+        };
+        return db.addMessage(messageToSave);
+      }),
+    );
+
+    // Refresh messages for the current chat
+    if (activeChat?.id === chatId) {
+      const updatedMessages = await db.getChatMessages(chatId);
+      setMessages(updatedMessages);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -160,11 +142,11 @@ export default function Home() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <ChatInterface
           chat={activeChat}
-          // onSendMessage={addMessage}
-          // mcpServers={mcpServers}
+          messages={messages}
           apiKeys={apiKeys}
           onCreateChat={createNewChat}
           onUpdateApiKey={updateChatApiKey}
+          onUpdateMessages={updateChatMessages}
         />
       </div>
 

@@ -131,7 +131,7 @@ export default function MCPSettings({
                   <Label htmlFor="command">Command</Label>
                   <Input
                     id="command"
-                    value={newServer.command || ""}
+                    value={(newServer.command as string) || ""}
                     onChange={(e) =>
                       setNewServer({ ...newServer, command: e.target.value })
                     }

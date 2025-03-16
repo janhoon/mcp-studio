@@ -1,68 +1,108 @@
 "use client";
+
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MCPSettings from "@/components/mcp-settings";
 import APIKeySettings from "@/components/api-key-settings";
-import { useLocalStorage } from "@/hooks/use-local-storage";
 import type { MCPServer, APIKey } from "@/types";
+import * as db from "@/lib/db";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   // State for MCP servers
-  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
-    "mcp-servers",
-    [],
-  );
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
+  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
 
-  // State for API keys
-  const [apiKeys, setApiKeys] = useLocalStorage<APIKey[]>("api-keys", []);
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const loadedApiKeys = await db.getApiKeys();
+        setApiKeys(loadedApiKeys as APIKey[]);
+        setIsLoading(false);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("Failed to load data"));
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   // Add a new MCP server
-  const addMcpServer = (server: MCPServer) => {
+  const handleAddMcpServer = (server: MCPServer) => {
     setMcpServers([...mcpServers, server]);
   };
 
   // Remove an MCP server
-  const removeMcpServer = (serverId: string) => {
+  const handleRemoveMcpServer = (serverId: string) => {
     setMcpServers(mcpServers.filter((server) => server.id !== serverId));
   };
 
   // Add a new API key
-  const addApiKey = (apiKey: APIKey) => {
-    if (apiKey.isDefault) {
-      // If this key is set as default, remove default from others
-      setApiKeys([
-        ...apiKeys.map((key) => ({ ...key, isDefault: false })),
-        apiKey,
-      ]);
-    } else {
+  const handleAddApiKey = async (apiKey: APIKey) => {
+    try {
+      await db.addApiKey(apiKey as APIKey);
       setApiKeys([...apiKeys, apiKey]);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error("Failed to add API key"));
     }
   };
 
   // Remove an API key
-  const removeApiKey = (keyId: string) => {
-    setApiKeys(apiKeys.filter((key) => key.id !== keyId));
+  const handleRemoveApiKey = async (keyId: string) => {
+    try {
+      await db.deleteApiKey(keyId);
+      setApiKeys(apiKeys.filter((key) => key.id !== keyId));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error("Failed to remove API key"),
+      );
+    }
   };
 
   // Update an API key
-  const updateApiKey = (updatedKey: APIKey) => {
-    setApiKeys(
-      apiKeys.map((key) => (key.id === updatedKey.id ? updatedKey : key)),
-    );
+  const handleUpdateApiKey = async (apiKey: APIKey) => {
+    try {
+      await db.updateApiKey(apiKey as APIKey);
+      setApiKeys(apiKeys.map((key) => (key.id === apiKey.id ? apiKey : key)));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error("Failed to update API key"),
+      );
+    }
   };
 
   // Set a key as the default
-  const setDefaultApiKey = (keyId: string) => {
-    setApiKeys(
-      apiKeys.map((key) => ({
-        ...key,
-        isDefault: key.id === keyId,
-      })),
-    );
+  const handleSetDefaultApiKey = async (keyId: string) => {
+    try {
+      // Update all keys to be non-default except the selected one
+      await Promise.all(
+        apiKeys.map((key) =>
+          db.updateApiKey({
+            ...key,
+            isDefault: key.id === keyId,
+          }),
+        ),
+      );
+
+      // Update local state
+      setApiKeys(
+        apiKeys.map((key) => ({
+          ...key,
+          isDefault: key.id === keyId,
+        })),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err : new Error("Failed to set default API key"),
+      );
+    }
   };
 
   return (
@@ -96,10 +136,12 @@ export default function SettingsPage() {
             <div className="bg-card rounded-lg border border-border">
               <APIKeySettings
                 apiKeys={apiKeys}
-                onAddKey={addApiKey}
-                onRemoveKey={removeApiKey}
-                onUpdateKey={updateApiKey}
-                onSetDefaultKey={setDefaultApiKey}
+                onAddKey={handleAddApiKey}
+                onRemoveKey={handleRemoveApiKey}
+                onUpdateKey={handleUpdateApiKey}
+                onSetDefaultKey={handleSetDefaultApiKey}
+                isLoading={isLoading}
+                error={error}
               />
             </div>
           </TabsContent>
@@ -108,8 +150,8 @@ export default function SettingsPage() {
             <div className="bg-card rounded-lg border border-border">
               <MCPSettings
                 mcpServers={mcpServers}
-                onAddServer={addMcpServer}
-                onRemoveServer={removeMcpServer}
+                onAddServer={handleAddMcpServer}
+                onRemoveServer={handleRemoveMcpServer}
               />
             </div>
           </TabsContent>
