@@ -1,101 +1,171 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useLocalStorage } from "@/hooks/use-local-storage";
+import ChatInterface from "@/components/chat-interface";
+import ChatHistory from "@/components/chat-history";
+import MCPSettings from "@/components/mcp-settings";
+import type { MCPServer, Chat, Message, APIKey } from "@/types";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  // State for MCP servers
+  const [mcpServers, setMcpServers] = useLocalStorage<MCPServer[]>(
+    "mcp-servers",
+    [],
+  );
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  // State for API keys
+  const [apiKeys, setApiKeys] = useLocalStorage<APIKey[]>("api-keys", []);
+
+  // State for chats
+  const [chats, setChats] = useLocalStorage<Chat[]>("chats", []);
+  const [activeChat, setActiveChat] = useState<Chat | null>(null);
+
+  // Create a new chat
+  const createNewChat = () => {
+    // Find default API key if any
+    const defaultKey = apiKeys.find((key) => key.isDefault);
+
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: "New Chat",
+      messages: [],
+      createdAt: new Date().toISOString(),
+      mcpServerId: mcpServers.length > 0 ? mcpServers[0].id : null,
+      apiKeyId: defaultKey?.id || null,
+    };
+
+    setChats([newChat, ...chats]);
+    setActiveChat(newChat);
+  };
+
+  // Add a message to the active chat
+  const addMessage = (message: Message) => {
+    if (!activeChat) return;
+
+    const updatedChat = {
+      ...activeChat,
+      messages: [...activeChat.messages, message],
+      title:
+        activeChat.messages.length === 0
+          ? message.content.slice(0, 30) + "..."
+          : activeChat.title,
+    };
+
+    setActiveChat(updatedChat);
+    setChats(
+      chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)),
+    );
+  };
+
+  // Add a new MCP server
+  const addMcpServer = (server: MCPServer) => {
+    setMcpServers([...mcpServers, server]);
+  };
+
+  // Remove an MCP server
+  const removeMcpServer = (serverId: string) => {
+    setMcpServers(mcpServers.filter((server) => server.id !== serverId));
+  };
+
+  // Add a new API key
+  const addApiKey = (apiKey: APIKey) => {
+    if (apiKey.isDefault) {
+      // If this key is set as default, remove default from others
+      setApiKeys([
+        ...apiKeys.map((key) => ({ ...key, isDefault: false })),
+        apiKey,
+      ]);
+    } else {
+      setApiKeys([...apiKeys, apiKey]);
+    }
+  };
+
+  // Remove an API key
+  const removeApiKey = (keyId: string) => {
+    setApiKeys(apiKeys.filter((key) => key.id !== keyId));
+
+    // Update any chats using this key to use null
+    setChats(
+      chats.map((chat) =>
+        chat.apiKeyId === keyId ? { ...chat, apiKeyId: null } : chat,
+      ),
+    );
+  };
+
+  // Update an API key
+  const updateApiKey = (updatedKey: APIKey) => {
+    setApiKeys(
+      apiKeys.map((key) => (key.id === updatedKey.id ? updatedKey : key)),
+    );
+  };
+
+  // Set a key as the default
+  const setDefaultApiKey = (keyId: string) => {
+    setApiKeys(
+      apiKeys.map((key) => ({
+        ...key,
+        isDefault: key.id === keyId,
+      })),
+    );
+  };
+
+  // Update the API key for the active chat
+  const updateChatApiKey = (apiKeyId: string | null) => {
+    if (!activeChat) return;
+
+    const updatedChat = {
+      ...activeChat,
+      apiKeyId,
+    };
+
+    setActiveChat(updatedChat);
+    setChats(
+      chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)),
+    );
+  };
+
+  // Initialize with a new chat if none exists
+  useEffect(() => {
+    if (chats.length === 0) {
+      createNewChat();
+    } else if (!activeChat) {
+      setActiveChat(chats[0]);
+    }
+  }, [chats, activeChat]);
+
+  return (
+    <div className="flex h-screen bg-background">
+      {/* Chat History Sidebar */}
+      <div className="w-64 border-r border-border h-full overflow-y-auto hidden md:block">
+        <ChatHistory
+          chats={chats}
+          activeChat={activeChat}
+          onSelectChat={setActiveChat}
+          onCreateChat={createNewChat}
+        />
+      </div>
+
+      {/* Main Chat Interface */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <ChatInterface
+          chat={activeChat}
+          onSendMessage={addMessage}
+          mcpServers={mcpServers}
+          apiKeys={apiKeys}
+          onCreateChat={createNewChat}
+          onUpdateApiKey={updateChatApiKey}
+        />
+      </div>
+
+      {/* MCP Settings Panel */}
+      <div className="w-80 border-l border-border h-full overflow-y-auto hidden lg:block">
+        <MCPSettings
+          mcpServers={mcpServers}
+          onAddServer={addMcpServer}
+          onRemoveServer={removeMcpServer}
+        />
+      </div>
     </div>
   );
 }
