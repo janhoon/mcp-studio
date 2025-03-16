@@ -69,46 +69,46 @@ export default function Home() {
   };
 
   // Add a new API key
-  const addApiKey = (apiKey: APIKey) => {
-    if (apiKey.isDefault) {
-      // If this key is set as default, remove default from others
-      setApiKeys([
-        ...apiKeys.map((key) => ({ ...key, isDefault: false })),
-        apiKey,
-      ]);
-    } else {
-      setApiKeys([...apiKeys, apiKey]);
-    }
-  };
+  // const addApiKey = (apiKey: APIKey) => {
+  //   if (apiKey.isDefault) {
+  //     // If this key is set as default, remove default from others
+  //     setApiKeys([
+  //       ...apiKeys.map((key) => ({ ...key, isDefault: false })),
+  //       apiKey,
+  //     ]);
+  //   } else {
+  //     setApiKeys([...apiKeys, apiKey]);
+  //   }
+  // };
 
-  // Remove an API key
-  const removeApiKey = (keyId: string) => {
-    setApiKeys(apiKeys.filter((key) => key.id !== keyId));
+  // // Remove an API key
+  // const removeApiKey = (keyId: string) => {
+  //   setApiKeys(apiKeys.filter((key) => key.id !== keyId));
 
-    // Update any chats using this key to use null
-    setChats(
-      chats.map((chat) =>
-        chat.apiKeyId === keyId ? { ...chat, apiKeyId: null } : chat,
-      ),
-    );
-  };
+  //   // Update any chats using this key to use null
+  //   setChats(
+  //     chats.map((chat) =>
+  //       chat.apiKeyId === keyId ? { ...chat, apiKeyId: null } : chat,
+  //     ),
+  //   );
+  // };
 
-  // Update an API key
-  const updateApiKey = (updatedKey: APIKey) => {
-    setApiKeys(
-      apiKeys.map((key) => (key.id === updatedKey.id ? updatedKey : key)),
-    );
-  };
+  // // Update an API key
+  // const updateApiKey = (updatedKey: APIKey) => {
+  //   setApiKeys(
+  //     apiKeys.map((key) => (key.id === updatedKey.id ? updatedKey : key)),
+  //   );
+  // };
 
-  // Set a key as the default
-  const setDefaultApiKey = (keyId: string) => {
-    setApiKeys(
-      apiKeys.map((key) => ({
-        ...key,
-        isDefault: key.id === keyId,
-      })),
-    );
-  };
+  // // Set a key as the default
+  // const setDefaultApiKey = (keyId: string) => {
+  //   setApiKeys(
+  //     apiKeys.map((key) => ({
+  //       ...key,
+  //       isDefault: key.id === keyId,
+  //     })),
+  //   );
+  // };
 
   // Update the API key for the active chat
   const updateChatApiKey = (apiKeyId: string | null) => {
@@ -123,6 +123,14 @@ export default function Home() {
     setChats(
       chats.map((chat) => (chat.id === updatedChat.id ? updatedChat : chat)),
     );
+  };
+
+  const deleteChat = (chatId: string) => {
+    setChats(chats.filter((chat) => chat.id !== chatId));
+  };
+
+  const renameChat = (chatId: string, newTitle: string) => {
+    setChats(chats.map((chat) => (chat.id === chatId ? { ...chat, title: newTitle } : chat)));
   };
 
   // Initialize with a new chat if none exists
@@ -143,6 +151,8 @@ export default function Home() {
           activeChat={activeChat}
           onSelectChat={setActiveChat}
           onCreateChat={createNewChat}
+          onDeleteChat={deleteChat}
+          onRenameChat={renameChat}
         />
       </div>
 
@@ -150,8 +160,8 @@ export default function Home() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <ChatInterface
           chat={activeChat}
-          onSendMessage={addMessage}
-          mcpServers={mcpServers}
+          // onSendMessage={addMessage}
+          // mcpServers={mcpServers}
           apiKeys={apiKeys}
           onCreateChat={createNewChat}
           onUpdateApiKey={updateChatApiKey}

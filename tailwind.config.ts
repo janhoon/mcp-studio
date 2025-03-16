@@ -1,4 +1,6 @@
 import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
+import typography from "@tailwindcss/typography";
 
 const config: Config = {
   darkMode: ["class"],
@@ -56,8 +58,45 @@ const config: Config = {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            'code::before': {
+              content: '""'
+            },
+            'code::after': {
+              content: '""'
+            },
+            'table': {
+              borderCollapse: 'collapse',
+              width: '100%',
+              marginTop: '1.5em',
+              marginBottom: '1.5em'
+            },
+            'th, td': {
+              border: '1px solid var(--tw-prose-counters)',
+              padding: '0.75em',
+              textAlign: 'left'
+            },
+            'th': {
+              backgroundColor: 'var(--tw-prose-pre-bg)',
+              fontWeight: '600'
+            },
+            'thead th': {
+              verticalAlign: 'bottom',
+              borderBottomWidth: '2px'
+            },
+            'tbody tr': {
+              borderBottomWidth: '1px'
+            },
+            'tbody tr:last-child': {
+              borderBottomWidth: '0'
+            }
+          }
+        }
+      }
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [animate, typography],
 };
 export default config;
